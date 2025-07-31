@@ -9,7 +9,7 @@ env:
   AZURE_WEBAPP_NAME: 'ASPAPP'
   SLOT_NAME: 'staging'
   RESOURCE_GROUP: 'ASPAPP_group'
-  DOTNET_VERSION: '8.x'
+  DOTNET_VERSION: '8.0.x'
   WORKING_DIRECTORY: 'App' # Update if your solution is in a subfolder
 
 jobs:
