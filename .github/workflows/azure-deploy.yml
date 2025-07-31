@@ -10,7 +10,7 @@ env:
   SLOT_NAME: 'staging'
   RESOURCE_GROUP: 'ASPAPP_group'
   DOTNET_VERSION: '8.x'
-  WORKING_DIRECTORY: '.' # Update if your solution is in a subfolder
+  WORKING_DIRECTORY: 'App' # Update if your solution is in a subfolder
 
 jobs:
   build-and-deploy:
