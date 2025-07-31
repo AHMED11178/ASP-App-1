@@ -1,0 +1,117 @@
+name: Build, Test, Deploy to Azure
+
+on:
+  push:
+    branches: [ "master" ]
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: 'ASPAPP'
+  SLOT_NAME: 'staging'
+  RESOURCE_GROUP: 'ASPAPP_group'
+  DOTNET_VERSION: '8.0.x'
+  WORKING_DIRECTORY: '.' # Update if your solution is in a subfolder
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    # Checkout code
+    - uses: actions/checkout@v4
+
+    # Setup .NET
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    # Restore dependencies
+    - name: Restore dependencies
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      run: dotnet restore
+
+    # Build
+    - name: Build
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      run: dotnet build --configuration Release --no-restore
+
+    # Run tests
+    - name: Test
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      run: dotnet test --no-build --verbosity normal
+
+    # Publish
+    - name: Publish
+      working-directory: ${{ env.WORKING_DIRECTORY }}
+      run: |
+        dotnet publish \
+          -c Release \
+          -o ${{ github.workspace }}/publish \
+          --no-build \
+          -p:Version=1.0.${{ github.run_number }}
+
+    # Azure Login
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    # Deploy to staging slot
+    - name: Deploy to Staging Slot
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        slot-name: ${{ env.SLOT_NAME }}
+        package: ${{ github.workspace }}/publish
+        enable-oryx-build: false
+
+    # Smoke test staging
+    - name: Smoke Test Staging
+      run: |
+        STAGING_URL="https://${{ env.AZURE_WEBAPP_NAME }}-${{ env.SLOT_NAME }}.azurewebsites.net/health"
+        echo "Testing endpoint: $STAGING_URL"
+        
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" $STAGING_URL)
+        if [ "$RESPONSE" -ne 200 ]; then
+          echo "::error::Smoke test failed with HTTP $RESPONSE"
+          exit 1
+        fi
+
+    # Swap slots
+    - name: Swap to Production
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          echo "Starting swap with preview..."
+          az webapp deployment slot swap \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --slot ${{ env.SLOT_NAME }} \
+            --target-slot production \
+            --action preview
+          
+          sleep 30 # Allow warm-up
+          
+          echo "Completing swap..."
+          az webapp deployment slot swap \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --slot ${{ env.SLOT_NAME }} \
+            --target-slot production \
+            --action swap
+          
+          echo "Swap completed at $(date)"
+
+    # Verify production
+    - name: Verify Production
+      run: |
+        PROD_URL="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health"
+        echo "Testing production endpoint: $PROD_URL"
+        
+        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" $PROD_URL)
+        if [ "$RESPONSE" -ne 200 ]; then
+          echo "::error::Production verification failed with HTTP $RESPONSE"
+          exit 1
+        fi
