@@ -1,16 +1,18 @@
 using System.Reflection;  
 
-
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-app.MapGet("/", () => "Hello World Ahmed, Hope you are doing well, I am doing good");
+// Add this health endpoint (must come before any auth middleware)
+app.MapGet("/health", () => 
+{
+    return Results.Ok(new 
+    {
+        Status = "Healthy",
+        Timestamp = DateTime.UtcNow
+    });
+}).AllowAnonymous(); // This is crucial
 
-// Allow anonymous access to health check
-app.MapGet("/health", () => Results.Ok(new {
-    Status = "Healthy",
-    Version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString(),
-    Environment = app.Environment.EnvironmentName
-})).AllowAnonymous();
+app.MapGet("/", () => "Hello World Ahmed, Hope you are doing well, I am doing good");
 
 app.Run();
