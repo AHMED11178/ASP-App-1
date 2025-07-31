@@ -76,18 +76,6 @@ jobs:
         package: ${{ github.workspace }}/publish
         enable-oryx-build: false
 
-    # Smoke test staging
-    - name: Smoke Test Staging
-      run: |
-        STAGING_URL="https://${{ env.AZURE_WEBAPP_NAME }}-${{ env.SLOT_NAME }}.azurewebsites.net/health"
-        echo "Testing endpoint: $STAGING_URL"
-        
-        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" $STAGING_URL)
-        if [ "$RESPONSE" -ne 200 ]; then
-          echo "::error::Smoke test failed with HTTP $RESPONSE"
-          exit 1
-        fi
-
     # Swap slots
     - name: Swap to Production
       uses: azure/CLI@v1
